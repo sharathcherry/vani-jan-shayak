@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+*.env.local
+
+# Build artifacts
+lambda_build/
+webhook_build/
+lambda_voice_rag.zip
+vani_webhook.zip
+main_updated.zip
+gov_myscheme_data.zip
+qdrant_hybrid_db.zip
+ffmpeg_layer.zip
+*.zip
+
+# Qdrant local database
+qdrant_hybrid_db/
+all_sources/
+new/
+
+# Logs & output
+*.log
+upsert_log.txt
+_deploy_output.txt
+qdrant_bedrock_eval_output.txt
+docker_build.log
+
+# Evaluation / test results
+*.json
+!package.json
+
+# Media files
+*.mp3
+*.mpeg
+*.wav
+
+# PDF / images
+pdf_pages/
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store
+
+# Fastembed model cache (large, baked into Docker image)
+fastembed_cache/

@@ -1,0 +1,57 @@
+# docker-compose.yml
+# -------------------
+# Local development stack:
+#   - qdrant: serves your existing local DB for testing
+#   - server: voice RAG FastAPI server connecting to Qdrant Cloud
+#
+# Usage:
+#   docker-compose up                  # start everything
+#   docker-compose up qdrant-local     # only local Qdrant (for migration testing)
+#   docker-compose up server           # only the voice RAG server (uses Qdrant Cloud)
+
+services:
+
+  # ── Local Qdrant (for dev/testing only) ───────────────────────────────────
+  # Serves your existing qdrant_hybrid_db folder via Docker
+  # Access: http://localhost:6333/dashboard
+  qdrant-local:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333" # REST API + Web UI dashboard
+      - "6334:6334" # gRPC
+    volumes:
+      # Mount your EXISTING local DB into the Qdrant container
+      # This means qdrant_hybrid_db/ is served directly — no re-import needed
+      - ./qdrant_hybrid_db:/qdrant/storage:z
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6333/healthz" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Voice RAG Server (connects to Qdrant Cloud) ────────────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env # picks up QDRANT_CLOUD_URL + QDRANT_CLOUD_API_KEY
+    environment:
+      # Override to use local Qdrant instead of Cloud (for testing):
+      # QDRANT_CLOUD_URL: ""
+      # QDRANT_PATH: /data/qdrant_hybrid_db
+    restart: unless-stopped
+    depends_on:
+      qdrant-local:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s # give time for BGE model to warm up

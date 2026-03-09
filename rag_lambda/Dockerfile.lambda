@@ -1,0 +1,42 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.lambda  (updated from qdrant.tech/documentation/quickstart)
+# Lambda Container Image — runs lambda_function.py
+# Connected to Qdrant Cloud (not local Qdrant)
+#
+# Why container instead of zip:
+#   - BGE-large model = 1.3 GB → too big for 250MB zip limit
+#   - Container image limit = 10 GB → fits easily
+#   - Model is baked in at build time → zero cold-start download
+#
+# Build & test locally:
+#   docker build -f Dockerfile.lambda -t gov-schemes-lambda .
+#   docker run -p 9000:8080 --env-file .env gov-schemes-lambda
+#   curl -X POST http://localhost:9000/2015-03-31/functions/function/invocations \
+#        -d '{"rawPath":"/health"}'
+#
+# Deploy:
+#   .\deploy_lambda.ps1
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM public.ecr.aws/lambda/python:3.12
+
+# Install build tools
+RUN dnf install -y gcc g++ && dnf clean all
+
+# Install Python dependencies
+COPY requirements_lambda.txt .
+RUN pip install --no-cache-dir -r requirements_lambda.txt
+
+# Pre-download BGE models at BUILD TIME into a fixed cache dir
+# This means zero model download at Lambda cold start
+COPY preload_models.py .
+RUN python preload_models.py
+
+# Set cache path so fastembed finds models at runtime
+ENV FASTEMBED_CACHE_DIR=/var/task/fastembed_cache
+
+# Copy Lambda handler
+COPY lambda_voice_rag/lambda_function.py ${LAMBDA_TASK_ROOT}/
+
+# Lambda handler entrypoint
+CMD ["lambda_function.lambda_handler"]

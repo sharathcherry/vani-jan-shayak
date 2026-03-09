@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.server
+# ECS Fargate / App Runner / EC2 — runs voice_rag_server.py (FastAPI)
+# Use this if you want always-on + Twilio webhooks without API Gateway
+#
+# Build:
+#   docker build -f Dockerfile.server -t gov-schemes-server .
+#
+# Run locally:
+#   docker run -p 8000:8000 --env-file .env gov-schemes-server
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.12-slim
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python deps first (cached layer)
+COPY requirements_lambda.txt .
+RUN pip install --no-cache-dir -r requirements_lambda.txt \
+    fastapi uvicorn[standard] twilio python-multipart
+
+# Pre-download BGE models at build time (baked into image)
+RUN python -c "
+from fastembed import TextEmbedding, SparseTextEmbedding
+print('Pre-loading BGE-large-en-v1.5...')
+TextEmbedding(model_name='BAAI/bge-large-en-v1.5')
+print('Pre-loading BM25...')
+SparseTextEmbedding(model_name='Qdrant/bm25')
+print('Done.')
+"
+
+# Copy application code
+COPY voice_rag_server.py .
+
+# Expose FastAPI port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start server
+CMD ["uvicorn", "voice_rag_server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
